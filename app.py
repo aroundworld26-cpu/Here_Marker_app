@@ -12,11 +12,11 @@ st.set_page_config(page_title="Here Marker", layout="wide")
 # --- 1. 보안 설정 (API 키 및 시트 URL) ---
 try:
     KAKAO_REST_API_KEY = st.secrets["KAKAO_REST_API_KEY"]
-    # 구글 시트 주소도 secrets에 저장해두면 관리가 편합니다.
-    SHEET_URL = st.secrets["GOOGLE_SHEET_URL"] 
+    # secrets.toml에 등록된 [sheets] 그룹을 딕셔너리 형태로 통째로 가져옵니다.
+    sheet_dict = st.secrets["sheets"] 
 except KeyError:
-    st.error("⚠️ Streamlit Secrets 설정에서 API 키와 시트 URL을 확인해 주세요.")
-    st.stop()
+    st.error("⚠️ Streamlit Secrets 설정에서 API 키와 시트 주소를 확인해 주세요.")
+    st.stop() 
 
 # --- 2. 핵심 함수 정의 ---
 
@@ -45,7 +45,20 @@ def load_data_from_gsheet(url):
     except Exception as e:
         st.error(f"데이터를 불러오지 못했습니다: {e}")
         return None
-
+# --- 사이드바 UI 추가 ---
+with st.sidebar:
+    st.header("📂 데이터 선택")
+    # sheet_dict의 키값(시트 이름들)을 리스트로 만들어 드롭다운 메뉴로 제공
+    selected_sheet_name = st.selectbox("지도에 표시할 데이터를 선택하세요:", list(sheet_dict.keys()))
+    
+    # 선택한 시트 이름에 해당하는 실제 URL을 추출
+    SELECTED_SHEET_URL = sheet_dict[selected_sheet_name]
+    
+    # 새로고침 버튼도 사이드바로 옮기면 UI가 더 깔끔합니다.
+    if st.button("🔄 현재 데이터 강제 새로고침"):
+        st.cache_data.clear()
+        st.rerun()
+        
 # --- 3. 메인 UI 구성 ---
 
 st.title("📍 Here Marker")
