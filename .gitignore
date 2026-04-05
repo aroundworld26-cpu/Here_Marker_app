@@ -1,0 +1,41 @@
+# --- Python 관련 ---
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.python-version
+
+# --- 가상환경 관련 (매우 중요: 용량이 크고 사용자마다 다름) ---
+.venv/
+venv/
+env/
+bin/
+lib/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.installed.cfg
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+
+# --- Streamlit 관련 ---
+.streamlit/config.toml
+# 주의: secrets.toml은 절대 공유되면 안 되므로 반드시 포함합니다.
+.streamlit/secrets.toml
+
+# --- 데이터 및 엑셀 관련 ---
+*.xlsx
+*.csv
+*.xls
+
+# --- 운영체제 관련 ---
+.DS_Store
+Thumbs.db
+
+# --- 기타 환경 변수 ---
+.env
+.flaskenv
