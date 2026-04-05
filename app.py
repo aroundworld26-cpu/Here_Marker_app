@@ -80,12 +80,18 @@ if df is not None and '주소' in df.columns:
         icon=folium.Icon(color='blue', icon='star')
     ).add_to(m)
 
-    # 업체 위치 표시 (빨간색 마커)
+# 업체 위치 표시 (빨간색 마커)
     for _, row in df.iterrows():
         folium.Marker(
             [row['위도'], row['경도']],
-            popup=f"<b>{row.get('업체명', '업체')}</b><br>{row['주소']}<br>{row.get('전화번호', '')}",
-            tooltip=row.get('업체명', '상세보기'),
+            # 1. 마커를 클릭했을 때 나타나는 상세 정보 (팝업)
+            popup=folium.Popup(f"<b>{row['업체명']}</b><br>{row['주소']}<br>{row.get('전화번호', '')}", max_width=250),
+            
+            # 2. 마커 옆에 항상 표시되는 이름 (툴팁)
+            # permanent=True: 마우스를 올리지 않아도 항상 이름이 보입니다.
+            # permanent=False: 마우스를 올리거나 모바일에서 터치했을 때만 이름이 보입니다.
+            tooltip=folium.Tooltip(row['업체명'], permanent=True),
+            
             icon=folium.Icon(color='red', icon='info-sign')
         ).add_to(m)
 
