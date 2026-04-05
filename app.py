@@ -42,15 +42,17 @@ def load_data_from_gsheet(url):
     try:
         # 1. requests로 SSL 검사를 강제 무시(verify=False)하고 데이터를 가져옵니다.
         response = requests.get(url, verify=False)
-        response.raise_for_status() # 웹페이지 에러가 있으면 잡아냅니다.
+        response.raise_for_status() 
         
-        # 2. 가져온 텍스트 형태의 데이터를 pandas가 읽을 수 있도록 변환합니다.
+        # 2. ★핵심: 한글이 깨지지 않도록 인코딩을 명시적으로 utf-8로 설정합니다.
+        response.encoding = 'utf-8'
+        
+        # 3. 가져온 텍스트 형태의 데이터를 pandas가 읽을 수 있도록 변환합니다.
         df = pd.read_csv(io.StringIO(response.text))
         return df
     except Exception as e:
         st.error(f"데이터를 불러오지 못했습니다: {e}")
         return None
-
 # --- 사이드바 UI 추가 ---
 with st.sidebar:
     st.header("📂 데이터 선택")
@@ -68,7 +70,7 @@ with st.sidebar:
 # --- 3. 메인 UI 구성 ---
 
 st.title("📍 Here Marker")
-st.subheader("실시간 구글 시트 연동 지도")
+# st.subheader("구글 시트 연동")
 
 # GPS 위치 가져오기
 location = streamlit_geolocation()
@@ -83,8 +85,10 @@ else:
 # 데이터 불러오기
 # 기존 고정된 SHEET_URL 대신, 사용자가 선택한 SELECTED_SHEET_URL을 넣습니다.
 df = load_data_from_gsheet(SELECTED_SHEET_URL)
+
 # 파이썬이 읽어온 데이터의 첫 줄(컬럼명)을 화면에 강제로 출력해 보는 테스트 코드
-st.write("데이터 컬럼 확인:", df.columns if df is not None else "데이터 없음")
+# st.write("데이터 컬럼 확인:", df.columns if df is not None else "데이터 없음")
+
 if df is not None and '주소' in df.columns:
     with st.spinner(f"'{selected_sheet_name}' 데이터를 지도에 반영 중입니다..."):
         df[['위도', '경도']] = df['주소'].apply(lambda x: pd.Series(get_coordinates_kakao(str(x))))
