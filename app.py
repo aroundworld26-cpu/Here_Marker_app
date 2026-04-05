@@ -7,6 +7,7 @@ import io
 from streamlit_geolocation import streamlit_geolocation
 import ssl
 
+
 # --- 0. 환경 설정 (맥 SSL 에러 및 페이지 설정) ---
 ssl._create_default_https_context = ssl._create_unverified_context
 st.set_page_config(page_title="Here Marker", layout="wide")
@@ -63,18 +64,32 @@ with col_refresh:
         st.cache_data.clear()
         st.rerun()
 
-# --- 4. 팀 선택 버튼 (메인 화면) ---
+# --- 4. GPS 아이콘 + 팀 선택 버튼 (모바일 최적화 한 줄 배치) ---
 if 'current_team' not in st.session_state:
     st.session_state.current_team = list(sheet_dict.keys())[0]
 
-st.markdown("### 📂 표시할 데이터 선택")
-team_cols = st.columns(len(sheet_dict))
+# 컬럼 비중 조절 (아이콘용 작은 칸 1개 + 팀 개수만큼의 칸)
+# 아이콘 1.5, 각 팀 버튼 3의 비율로 배분 (팀이 많으면 숫자를 조절하세요)
+column_weights = [1.5] + [3] * len(sheet_dict)
+menu_cols = st.columns(column_weights)
 
+# 1. 가장 왼쪽: GPS 아이콘 버튼 (누르면 현재 위치로 지도 갱신 효과)
+with menu_cols[0]:
+    if st.button("🎯", help="내 위치 찾기", use_container_width=True):
+        st.rerun() # 앱을 다시 읽어 GPS를 최신화함
+
+# 2. 옆으로 팀 리스트 버튼 배치
 for i, team_name in enumerate(sheet_dict.keys()):
-    with team_cols[i]:
-        # 현재 선택된 팀은 버튼 색상을 다르게 표현하거나 강조할 수 있습니다.
-        if st.button(team_name, use_container_width=True, key=f"btn_{i}"):
+    with menu_cols[i+1]:
+        # 현재 선택된 팀은 버튼 앞에 체크 표시(✅)를 붙여 시각적으로 구분
+        display_name = f"✅ {team_name}" if st.session_state.current_team == team_name else team_name
+        
+        if st.button(display_name, use_container_width=True, key=f"btn_{i}"):
             st.session_state.current_team = team_name
+            st.rerun() # 팀 변경 시 즉시 반영
+
+# 현재 상태 안내 문구 (공간 절약을 위해 작게 표시)
+# st.caption(f"📍 현재 **{st.session_state.current_team}** 데이터가 지도에 표시 중입니다.")
 
 SELECTED_SHEET_URL = sheet_dict[st.session_state.current_team]
 st.info(f"현재 **[{st.session_state.current_team}]** 데이터를 지도에 표시하고 있습니다.")
@@ -125,7 +140,7 @@ if df is not None and '주소' in df.columns:
 
     # 하단 데이터 리스트 확인
     with st.expander(f"📋 {st.session_state.current_team} 상세 명단"):
-        st.dataframe(df[['업체명', '주소', '전화번호']], use_container_width=True)
+        st.dataframe(df[['업체명', '주소']], use_container_width=True)
 
 else:
     st.error("구글 시트의 내용을 읽어오지 못했거나 '주소' 컬럼이 없습니다. 시트 설정을 확인해 주세요.")
