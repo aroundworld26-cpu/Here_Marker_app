@@ -7,7 +7,48 @@ import io
 from streamlit_geolocation import streamlit_geolocation
 import ssl
 
+# --- 모바일 최적화: 버튼 글자 크기 및 간격 조절 ---
+# --- 모바일 최적화: 버튼 최소 크기 및 가로 한 줄 밀착 배치 ---
+st.markdown("""
+    <style>
+    /* 1. 기본 GPS 아이콘 숨기기 */
+    iframe[title="streamlit_geolocation.streamlit_geolocation"] {
+        display: none;
+    }
 
+    /* 2. 버튼 컨테이너를 가로로 촘촘하게 배치 (핵심) */
+    [data-testid="stHorizontalBlock"] {
+        display: flex;
+        flex-direction: row;
+        flex-wrap: nowrap;      /* 줄바꿈 금지 */
+        overflow-x: auto;       /* 버튼이 너무 많으면 가로 스크롤 허용 */
+        gap: 5px !important;    /* 버튼 사이 간격 5px */
+        align-items: center;
+    }
+
+    /* 3. 각 버튼 컬럼의 너비를 '균등'이 아닌 '최소 내용치'로 설정 */
+    [data-testid="column"] {
+        width: auto !important;
+        flex: 0 1 auto !important;
+        min-width: min-content !important;
+    }
+
+    /* 4. 버튼 내부 스타일 세밀 조절 */
+    div[data-testid="stButton"] button {
+        font-size: 11px !important;    /* 글자 크기 살짝 축소 */
+        padding: 4px 10px !important;  /* 좌우 여백 최적화 */
+        white-space: nowrap !important; /* 글자 잘림 방지 */
+        border-radius: 20px !important; /* 둥근 버튼으로 세련되게 */
+    }
+
+    /* 5. 현재 선택된 팀 버튼 강조 색상 */
+    div[data-testid="stButton"] button:contains("✅") {
+        background-color: #007BFF !important;
+        color: white !important;
+        border-color: #0056b3 !important;
+    }
+    </style>
+""", unsafe_allow_html=True)
 # --- 0. 환경 설정 (맥 SSL 에러 및 페이지 설정) ---
 ssl._create_default_https_context = ssl._create_unverified_context
 st.set_page_config(page_title="Here Marker", layout="wide")
