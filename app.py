@@ -7,7 +7,7 @@ import io
 from streamlit_geolocation import streamlit_geolocation
 import ssl
 
-# --- 0. 환경 설정 ---
+# --- 0. 환경 설정 (맥 SSL 에러 방지 및 페이지 설정) ---
 ssl._create_default_https_context = ssl._create_unverified_context
 st.set_page_config(page_title="Here Marker", layout="wide")
 
@@ -27,7 +27,6 @@ def get_coordinates_kakao(address):
     url = f"https://dapi.kakao.com/v2/local/search/address.json?query={address}"
     headers = {"Authorization": f"KakaoAK {KAKAO_REST_API_KEY}"}
     try:
-        # SSL 검증 무시 설정
         response = requests.get(url, headers=headers, verify=False)
         result = response.json()
         if result.get('documents'):
@@ -64,11 +63,6 @@ with st.sidebar:
     if st.button("🔄 데이터 강제 새로고침", use_container_width=True):
         st.cache_data.clear()
         st.rerun()
-        
-    st.divider()
-    st.caption("카카오 API 및 구글 시트 실시간 연동 중")
-
-SELECTED_SHEET_URL = sheet_dict[st.session_state.current_team]
 
 # --- 4. 메인 화면 구성 ---
 
@@ -76,60 +70,54 @@ st.title(f"📍 Here Marker - {st.session_state.current_team}")
 
 # GPS 위치 확인
 location = streamlit_geolocation()
-if location['latitude'] and location['longitude']:
-    my_lat, my_lng = location['latitude'], location['longitude']
-else:
-    my_lat, my_lng = 36.3504, 127.3845 # 기본 대전 좌표
+my_lat, my_lng = (location['latitude'], location['longitude']) if location['latitude'] else (36.3504, 127.3845)
 
-# 데이터 로드 및 좌표 변환
-df = load_data_from_gsheet(SELECTED_SHEET_URL)
+# 데이터 로드 및 처리
+df = load_data_from_gsheet(sheet_dict[st.session_state.current_team])
 
 if df is not None and '주소' in df.columns:
-    with st.spinner(f"'{st.session_state.current_team}' 좌표 변환 중..."):
-        # 좌표 변환 수행
+    with st.spinner("데이터 분석 중..."):
         df[['위도', '경도']] = df['주소'].apply(lambda x: pd.Series(get_coordinates_kakao(str(x))))
-        
-        # 통계 계산
-        total_count = len(df)
         marked_df = df.dropna(subset=['위도', '경도'])
+        
+        total_count = len(df)
         marked_count = len(marked_df)
         unmarked_count = total_count - marked_count
 
-    # --- 현황 요약 표시 (Metrics) ---
-    col1, col2, col3 = st.columns(3)
-    col1.metric("전체 업체 수", f"{total_count}개")
-    col2.metric("마커 표시됨", f"{marked_count}개", delta_color="normal")
-    col3.metric("표시 안 됨(주소 오류)", f"{unmarked_count}개", delta=f"-{unmarked_count}" if unmarked_count > 0 else None, delta_color="inverse")
+    # --- 요청하신 요약 표 표시 ---
+    st.markdown("#### 📊 업체 표시 현황")
+    
+    summary_data = {
+        "전체 업체": [f"{total_count}개"],
+        "표시 업체": [f"{marked_count}개"],
+        "미표시 업체": [f"{unmarked_count}개"]
+    }
+    st.table(pd.DataFrame(summary_data))
 
     if unmarked_count > 0:
-        st.warning(f"⚠️ 주소가 불분명하여 표시되지 않은 업체가 {unmarked_count}개 있습니다. 시트의 주소를 확인해 주세요.")
+        st.warning(f"⚠️ 주소 오류 등으로 표시되지 않은 업체가 {unmarked_count}개 있습니다.")
 
-    # 지도 생성
+    st.divider()
+
+    # --- 5. 지도 생성 및 출력 ---
     m = folium.Map(location=[my_lat, my_lng], zoom_start=14)
 
     # 내 위치 마커
-    folium.Marker(
-        [my_lat, my_lng],
-        popup="내 위치",
-        icon=folium.Icon(color='blue', icon='star')
-    ).add_to(m)
+    folium.Marker([my_lat, my_lng], popup="내 위치", icon=folium.Icon(color='blue', icon='star')).add_to(m)
 
-    # 업체 마커 표시
+    # 업체 마커
     for _, row in marked_df.iterrows():
         folium.Marker(
             [row['위도'], row['경도']],
-            popup=folium.Popup(f"<b>{row['업체명']}</b><br>{row['주소']}<br>{row.get('전화번호', '')}", max_width=300),
+            popup=folium.Popup(f"<b>{row['업체명']}</b><br>{row['주소']}", max_width=300),
             tooltip=folium.Tooltip(row['업체명'], permanent=True),
             icon=folium.Icon(color='red', icon='info-sign')
         ).add_to(m)
 
-    # 지도 출력
     st_folium(m, width="100%", height=600)
 
-    # --- 팀 데이터 원본 (선택 시 보여주기) ---
-    st.divider()
-    with st.expander(f"🔍 {st.session_state.current_team} 상세 데이터 원본 보기"):
-        st.write("표시 안 된 업체는 아래 표에서 위도/경도가 NaN으로 나타납니다.")
+    # --- 6. 상세 데이터 원본 (Expander) ---
+    with st.expander("🔍 상세 데이터 원본 보기"):
         st.dataframe(df, use_container_width=True)
 
 else:
