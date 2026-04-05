@@ -5,10 +5,10 @@ from streamlit_folium import st_folium
 import requests
 import io
 from streamlit_geolocation import streamlit_geolocation
-
+import ssl
+ssl._create_default_https_context = ssl._create_unverified_context
 # 페이지 설정
 st.set_page_config(page_title="Here Marker", layout="wide")
-
 # --- 1. 보안 설정 (API 키 및 시트 URL) ---
 try:
     KAKAO_REST_API_KEY = st.secrets["KAKAO_REST_API_KEY"]
@@ -37,14 +37,20 @@ def get_coordinates_kakao(address):
     return None, None
 
 # 구글 시트 데이터 로드 함수
-@st.cache_data(ttl=600) # 10분마다 새 데이터를 가져오도록 설정
+@st.cache_data(ttl=600)
 def load_data_from_gsheet(url):
     try:
-        df = pd.read_csv(url)
+        # 1. requests로 SSL 검사를 강제 무시(verify=False)하고 데이터를 가져옵니다.
+        response = requests.get(url, verify=False)
+        response.raise_for_status() # 웹페이지 에러가 있으면 잡아냅니다.
+        
+        # 2. 가져온 텍스트 형태의 데이터를 pandas가 읽을 수 있도록 변환합니다.
+        df = pd.read_csv(io.StringIO(response.text))
         return df
     except Exception as e:
         st.error(f"데이터를 불러오지 못했습니다: {e}")
         return None
+
 # --- 사이드바 UI 추가 ---
 with st.sidebar:
     st.header("📂 데이터 선택")
@@ -58,7 +64,7 @@ with st.sidebar:
     if st.button("🔄 현재 데이터 강제 새로고침"):
         st.cache_data.clear()
         st.rerun()
-        
+
 # --- 3. 메인 UI 구성 ---
 
 st.title("📍 Here Marker")
@@ -75,11 +81,12 @@ else:
     st.info("⌛ GPS 신호를 기다리는 중입니다. 기본 위치가 표시됩니다.")
 
 # 데이터 불러오기
-df = load_data_from_gsheet(SHEET_URL)
-
+# 기존 고정된 SHEET_URL 대신, 사용자가 선택한 SELECTED_SHEET_URL을 넣습니다.
+df = load_data_from_gsheet(SELECTED_SHEET_URL)
+# 파이썬이 읽어온 데이터의 첫 줄(컬럼명)을 화면에 강제로 출력해 보는 테스트 코드
+st.write("데이터 컬럼 확인:", df.columns if df is not None else "데이터 없음")
 if df is not None and '주소' in df.columns:
-    # 주소를 좌표로 변환
-    with st.spinner('업체 위치 정보를 갱신 중입니다...'):
+    with st.spinner(f"'{selected_sheet_name}' 데이터를 지도에 반영 중입니다..."):
         df[['위도', '경도']] = df['주소'].apply(lambda x: pd.Series(get_coordinates_kakao(str(x))))
         df = df.dropna(subset=['위도', '경도'])
 
