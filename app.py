@@ -58,7 +58,7 @@ with st.sidebar:
 
 # --- 4. 메인 화면 ---
 # st.title(f"📍 Here Marker - {st.session_state.current_team}")
-st.markdown(f"### 📍 Here Marker - {st.session_state.current_team}")
+st.markdown(f"## 📍 Here Marker - {st.session_state.current_team}")
 location = streamlit_geolocation()
 my_lat, my_lng = (location['latitude'], location['longitude']) if location['latitude'] else (36.3504, 127.3845)
 
@@ -82,7 +82,7 @@ if df is not None and '주소' in df.columns:
     st.table(pd.DataFrame(summary_data))
 
     if unmarked_count > 0:
-        st.warning(f"⚠️ 주소 오류 등으로 표시되지 않은 업체가 {unmarked_count}개 있습니다.")
+        st.warning(f"⚠️ 표시되지 않은 업체가 {unmarked_count}개 있습니다.")
 
     st.divider()
     m = folium.Map(location=[my_lat, my_lng], zoom_start=14)
