@@ -57,8 +57,8 @@ with st.sidebar:
         st.rerun()
 
 # --- 4. 메인 화면 ---
-st.title(f"📍 Here Marker - {st.session_state.current_team}")
-
+# st.title(f"📍 Here Marker - {st.session_state.current_team}")
+st.markdown(f"### 📍 Here Marker - {st.session_state.current_team}")
 location = streamlit_geolocation()
 my_lat, my_lng = (location['latitude'], location['longitude']) if location['latitude'] else (36.3504, 127.3845)
 
