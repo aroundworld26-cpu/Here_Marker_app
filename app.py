@@ -105,7 +105,7 @@ with st.sidebar:
     search_result_placeholder = st.empty()
 
 # --- 4. 메인 화면 ---
-st.markdown(f"## 📍 Here Marker - {st.session_state.current_team}")
+st.markdown(f"## 🏘️📍 Here Marker - {st.session_state.current_team}")
 location = streamlit_geolocation()
 # 위치 정보가 없을 경우 대전시청 좌표를 기본값으로 사용
 my_lat, my_lng = (location['latitude'], location['longitude']) if location['latitude'] else (36.3504, 127.3845)
@@ -169,7 +169,7 @@ if df is not None and '주소' in df.columns:
                 st.info("검색 결과가 없습니다.")
 
     # --- 5. 화면 출력 (요약 표) ---
-    st.markdown(f"#### 📊 업체 표시 현황")
+    st.markdown(f"#### 🗂 업체 표시 현황")
     summary_data = {
         "전체 등록 업체": [f"{total_count}개"],
         "현재 지도 표시": [f"{filtered_count}개"],
