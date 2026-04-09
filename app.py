@@ -7,9 +7,6 @@ import requests
 import io
 from streamlit_geolocation import streamlit_geolocation
 import ssl
-from folium import LayerControl, Map
-from branca.element import MacroElement
-from jinja2 import Template
 
 # --- 0. 환경 설정 ---
 ssl._create_default_https_context = ssl._create_unverified_context
@@ -48,24 +45,7 @@ def load_data_from_gsheet(url):
         st.error(f"데이터 로드 실패: {e}")
         return None
 
-# --- 커스텀 컨트롤 위치 클래스 ---
-class CustomZoomPosition(MacroElement):
-    """
-    Move the zoom-control to the top-right (default is top-left).
-    """
-    def __init__(self, position='topright'):
-        super().__init__()
-        self._template = Template(u"""
-            {% macro script(this, kwargs) %}
-                {{this._parent.get_name()}}.zoomControl.setPosition('{{ this.position }}');
-            {% endmacro %}
-        """)
-        self.position = position
-
 # --- 3. 사이드바 (제어판 및 필터) ---
-# 검색 결과를 later로 채우기 위한 변수
-sidebar_search_result_data = None
-
 with st.sidebar:
     st.title("📂 제어판")
     selected_team = st.selectbox("팀 리스트 선택", options=list(sheet_dict.keys()))
@@ -84,14 +64,11 @@ with st.sidebar:
 
     st.divider()
     
-    # --- [추가된 기능] 업체 검색 및 초기화 ---
+    # 업체 검색 및 초기화
     st.subheader("🔍 업체 검색")
-    
-    # 세션 상태(Session State) 초기화
     if "search_word" not in st.session_state:
         st.session_state["search_word"] = ""
 
-    # 검색어 지우기 버튼을 눌렀을 때 실행될 함수
     def clear_search():
         st.session_state["search_word"] = ""
 
@@ -101,72 +78,65 @@ with st.sidebar:
     # 검색창 바로 밑에 초기화 버튼 배치 (클릭 시 clear_search 함수 실행)
     st.button(" ⏪ 검색어 지우기 (초기 화면)", on_click=clear_search, use_container_width=True)
 
-    # [검색 결과]를 담을 placeholder
-    search_result_placeholder = st.empty()
-
 # --- 4. 메인 화면 ---
 st.markdown(f"## 🏘️📍 Here Marker - {st.session_state.current_team}")
 location = streamlit_geolocation()
-# 위치 정보가 없을 경우 대전시청 좌표를 기본값으로 사용
 my_lat, my_lng = (location['latitude'], location['longitude']) if location['latitude'] else (36.3504, 127.3845)
 
 df = load_data_from_gsheet(sheet_dict[st.session_state.current_team])
 
-search_result = None  # 검색 결과 전역선언
-
 if df is not None and '주소' in df.columns:
     with st.spinner("데이터 분석 및 마커 준비 중..."):
-        # 1. 위도/경도 변환 (캐싱 적용)
-        df[['위도', '경도']] = df['주소'].apply(lambda x: pd.Series(get_coordinates_kakao(str(x))))
         
-        # 좌표가 정상적으로 변환된 데이터만 추출
+        # [핵심 로직] 시트에 위도/경도 열이 아예 없으면 일단 빈 칸으로 생성
+        if '위도' not in df.columns:
+            df['위도'] = None
+        if '경도' not in df.columns:
+            df['경도'] = None
+
+        # 하이브리드 함수: 값이 있으면 쓰고, 없으면 카카오 API 호출
+        def fetch_coords_if_missing(row):
+            # 1. 시트에 값이 존재하는지 확인 (빈 칸이 아님을 검사)
+            if pd.notna(row['위도']) and pd.notna(row['경도']) and str(row['위도']).strip() != "":
+                try:
+                    # 값이 있으면 문자열일 수 있으므로 소수점 숫자(float)로 변환하여 그대로 사용
+                    return pd.Series([float(row['위도']), float(row['경도'])])
+                except ValueError:
+                    # 실수로 숫자가 아닌 글자가 입력되어 있으면 무시하고 API 호출로 넘어감
+                    pass 
+            
+            # 2. 값이 비어있으면 카카오 API 호출
+            return pd.Series(get_coordinates_kakao(str(row['주소'])))
+
+        # 데이터프레임 전체에 하이브리드 방식 적용
+        df[['위도', '경도']] = df.apply(fetch_coords_if_missing, axis=1)
+        
+        # 좌표가 정상적으로 채워진(변환된) 데이터만 추출
         valid_coords_df = df.dropna(subset=['위도', '경도'])
         marked_df = valid_coords_df.copy()
         
-        # 2. 지역구 필터링 적용
+        # 지역구 필터링 적용
         if selected_gus:
-            # 선택된 구가 주소에 포함된 행만 필터링
             marked_df = marked_df[marked_df['주소'].str.contains('|'.join(selected_gus), na=False)]
         else:
-            # 아무 구도 선택하지 않으면 빈 데이터 반환
             marked_df = marked_df.iloc[0:0] 
 
-        # 3. 검색어 필터링 적용 및 지도 중심 이동 처리
+        # 검색어 필터링 적용 및 지도 중심 이동 처리
+        search_result = None
         if search_query:
             search_result = marked_df[marked_df['업체명'].str.contains(search_query, case=False, na=False)]
             if not search_result.empty:
                 st.success(f"선택한 지역 내 '{search_query}' 검색 결과: {len(search_result)}건")
-                # 검색 결과의 첫 번째 업체 위치로 지도 중심 이동
                 my_lat = search_result.iloc[0]['위도']
                 my_lng = search_result.iloc[0]['경도']
             else:
                 st.warning("현재 선택된 지역구 내에는 해당 업체를 찾을 수 없습니다.")
         
-        else:
-            search_result = None
-        
         # 현황 계산
-        total_count = len(df) # 전체 원본 데이터 수
-        valid_count = len(valid_coords_df) # 주소 변환 성공 수
-        filtered_count = len(marked_df) # 필터링되어 지도에 표시될 수
-        error_count = total_count - valid_count # 주소 오류 등으로 좌표 변환 실패 수
-
-    # --- 사이드바에 검색 결과 표시 ---
-    if search_query:
-        with st.sidebar:
-            st.markdown("##### 🔎 검색 결과")
-            if search_result is not None and not search_result.empty:
-                # 결과가 많은 경우 상위 10개만
-                shown_search = search_result[["업체명", "주소"]].head(10)
-                st.dataframe(
-                    shown_search.rename(columns={"업체명":"업체명", "주소":"주소"}),
-                    hide_index=True,
-                    use_container_width=True,
-                )
-                if len(search_result) > 10:
-                    st.info(f"총 {len(search_result)}건 중 상위 10건만 표시됩니다.")
-            else:
-                st.info("검색 결과가 없습니다.")
+        total_count = len(df)
+        valid_count = len(valid_coords_df)
+        filtered_count = len(marked_df)
+        error_count = total_count - valid_count
 
     # --- 5. 화면 출력 (요약 표) ---
     st.markdown(f"#### 🗂 업체 표시 현황")
@@ -180,24 +150,16 @@ if df is not None and '주소' in df.columns:
     st.divider()
     
     # --- 6. 지도 렌더링 ---
-    # 검색 결과가 있으면 지도를 확대(zoom 16), 없으면 기본 배율(zoom 13)
     zoom_level = 16 if search_query and search_result is not None and not search_result.empty else 13
     m = folium.Map(location=[my_lat, my_lng], zoom_start=zoom_level)
 
-    # [추가] 확대/축소 컨트롤을 우측 상단으로 옮기는 커스텀 요소를 지도에 추가
-    m.add_child(CustomZoomPosition(position='topright'))
-
-    # 내 위치 마커 (파란색 별)
     folium.Marker([location['latitude'] if location['latitude'] else 36.3504, 
                    location['longitude'] if location['longitude'] else 127.3845], 
                   popup="내 위치", icon=folium.Icon(color='blue', icon='star')).add_to(m)
 
-    # 마커 클러스터 생성
     marker_cluster = MarkerCluster().add_to(m)
 
-    # 필터링 및 검색이 완료된 마커 추가
     for _, row in marked_df.iterrows():
-        # 검색된 대상인지 확인하여 아이콘 색상 및 툴팁 가시성 변경
         is_search_target = search_query and search_query.lower() in str(row['업체명']).lower()
         icon_color = 'orange' if is_search_target else 'red'
         
@@ -208,10 +170,8 @@ if df is not None and '주소' in df.columns:
             icon=folium.Icon(color=icon_color, icon='info-sign')
         ).add_to(marker_cluster)
 
-    # Streamlit 화면에 지도 출력
     st_folium(m, width="100%", height=600)
 
-    # 원본 데이터 확인용 아코디언 메뉴
     with st.expander("🔍 상세 데이터 원본 보기"):
         st.dataframe(df, use_container_width=True)
 else:
