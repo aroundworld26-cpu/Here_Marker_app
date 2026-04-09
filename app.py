@@ -170,8 +170,8 @@ if df is not None and '주소' in df.columns:
             icon=folium.Icon(color=icon_color, icon='info-sign')
         ).add_to(marker_cluster)
 
-    st_folium(m, width="100%", height=600)
-
+    st_folium(m, width="100%", height=600, returned_objects=[])
+    
     with st.expander("🔍 상세 데이터 원본 보기"):
         st.dataframe(df, use_container_width=True)
 else:
