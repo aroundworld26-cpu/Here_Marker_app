@@ -63,6 +63,9 @@ class CustomZoomPosition(MacroElement):
         self.position = position
 
 # --- 3. 사이드바 (제어판 및 필터) ---
+# 검색 결과를 later로 채우기 위한 변수
+sidebar_search_result_data = None
+
 with st.sidebar:
     st.title("📂 제어판")
     selected_team = st.selectbox("팀 리스트 선택", options=list(sheet_dict.keys()))
@@ -98,6 +101,9 @@ with st.sidebar:
     # 검색창 바로 밑에 초기화 버튼 배치 (클릭 시 clear_search 함수 실행)
     st.button(" ⏪ 검색어 지우기 (초기 화면)", on_click=clear_search, use_container_width=True)
 
+    # [검색 결과]를 담을 placeholder
+    search_result_placeholder = st.empty()
+
 # --- 4. 메인 화면 ---
 st.markdown(f"## 📍 Here Marker - {st.session_state.current_team}")
 location = streamlit_geolocation()
@@ -105,6 +111,8 @@ location = streamlit_geolocation()
 my_lat, my_lng = (location['latitude'], location['longitude']) if location['latitude'] else (36.3504, 127.3845)
 
 df = load_data_from_gsheet(sheet_dict[st.session_state.current_team])
+
+search_result = None  # 검색 결과 전역선언
 
 if df is not None and '주소' in df.columns:
     with st.spinner("데이터 분석 및 마커 준비 중..."):
@@ -124,7 +132,6 @@ if df is not None and '주소' in df.columns:
             marked_df = marked_df.iloc[0:0] 
 
         # 3. 검색어 필터링 적용 및 지도 중심 이동 처리
-        search_result = None
         if search_query:
             search_result = marked_df[marked_df['업체명'].str.contains(search_query, case=False, na=False)]
             if not search_result.empty:
@@ -135,11 +142,31 @@ if df is not None and '주소' in df.columns:
             else:
                 st.warning("현재 선택된 지역구 내에는 해당 업체를 찾을 수 없습니다.")
         
+        else:
+            search_result = None
+        
         # 현황 계산
         total_count = len(df) # 전체 원본 데이터 수
         valid_count = len(valid_coords_df) # 주소 변환 성공 수
         filtered_count = len(marked_df) # 필터링되어 지도에 표시될 수
         error_count = total_count - valid_count # 주소 오류 등으로 좌표 변환 실패 수
+
+    # --- 사이드바에 검색 결과 표시 ---
+    if search_query:
+        with st.sidebar:
+            st.markdown("##### 🔎 검색 결과")
+            if search_result is not None and not search_result.empty:
+                # 결과가 많은 경우 상위 10개만
+                shown_search = search_result[["업체명", "주소"]].head(10)
+                st.dataframe(
+                    shown_search.rename(columns={"업체명":"업체명", "주소":"주소"}),
+                    hide_index=True,
+                    use_container_width=True,
+                )
+                if len(search_result) > 10:
+                    st.info(f"총 {len(search_result)}건 중 상위 10건만 표시됩니다.")
+            else:
+                st.info("검색 결과가 없습니다.")
 
     # --- 5. 화면 출력 (요약 표) ---
     st.markdown(f"#### 📊 업체 표시 현황")
