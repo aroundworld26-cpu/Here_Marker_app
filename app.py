@@ -7,6 +7,9 @@ import requests
 import io
 from streamlit_geolocation import streamlit_geolocation
 import ssl
+from folium import LayerControl, Map
+from branca.element import MacroElement
+from jinja2 import Template
 
 # --- 0. 환경 설정 ---
 ssl._create_default_https_context = ssl._create_unverified_context
@@ -44,6 +47,20 @@ def load_data_from_gsheet(url):
     except Exception as e:
         st.error(f"데이터 로드 실패: {e}")
         return None
+
+# --- 커스텀 컨트롤 위치 클래스 ---
+class CustomZoomPosition(MacroElement):
+    """
+    Move the zoom-control to the top-right (default is top-left).
+    """
+    def __init__(self, position='topright'):
+        super().__init__()
+        self._template = Template(u"""
+            {% macro script(this, kwargs) %}
+                {{this._parent.get_name()}}.zoomControl.setPosition('{{ this.position }}');
+            {% endmacro %}
+        """)
+        self.position = position
 
 # --- 3. 사이드바 (제어판 및 필터) ---
 with st.sidebar:
@@ -125,7 +142,7 @@ if df is not None and '주소' in df.columns:
         error_count = total_count - valid_count # 주소 오류 등으로 좌표 변환 실패 수
 
     # --- 5. 화면 출력 (요약 표) ---
-    st.markdown(f"#### 📊 {', '.join(selected_gus) if selected_gus else '선택 없음'} 표시 현황")
+    st.markdown(f"#### 📊 업체 표시 현황")
     summary_data = {
         "전체 등록 업체": [f"{total_count}개"],
         "현재 지도 표시": [f"{filtered_count}개"],
@@ -139,6 +156,9 @@ if df is not None and '주소' in df.columns:
     # 검색 결과가 있으면 지도를 확대(zoom 16), 없으면 기본 배율(zoom 13)
     zoom_level = 16 if search_query and search_result is not None and not search_result.empty else 13
     m = folium.Map(location=[my_lat, my_lng], zoom_start=zoom_level)
+
+    # [추가] 확대/축소 컨트롤을 우측 상단으로 옮기는 커스텀 요소를 지도에 추가
+    m.add_child(CustomZoomPosition(position='topright'))
 
     # 내 위치 마커 (파란색 별)
     folium.Marker([location['latitude'] if location['latitude'] else 36.3504, 
