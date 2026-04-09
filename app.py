@@ -46,6 +46,8 @@ def load_data_from_gsheet(url):
         return None
 
 # --- 3. 사이드바 (제어판 및 필터) ---
+# 검색 결과를 외부에서도 쓸 수 있도록 변수 선언
+search_result = None
 with st.sidebar:
     st.title("📂 제어판")
     selected_team = st.selectbox("팀 리스트 선택", options=list(sheet_dict.keys()))
@@ -132,6 +134,25 @@ if df is not None and '주소' in df.columns:
             else:
                 st.warning("현재 선택된 지역구 내에는 해당 업체를 찾을 수 없습니다.")
         
+        # ---- 검색 결과 사이드바 표시 ----
+        with st.sidebar:
+            st.subheader("🔎 업체 검색 결과")
+            if search_query:
+                if search_result is not None and not search_result.empty:
+                    st.write(
+                        f"검색 결과: {len(search_result)}건"
+                    )
+                    # 원하는 컬럼만 요약해서 보여주도록 함 (업체명, 주소)
+                    st.dataframe(
+                        search_result[['업체명', '주소']],
+                        height=220,
+                        use_container_width=True
+                    )
+                else:
+                    st.info("검색 결과가 없습니다.")
+            else:
+                st.caption("검색어를 입력하면 여기에 결과가 표시됩니다.")
+
         # 현황 계산
         total_count = len(df)
         valid_count = len(valid_coords_df)
@@ -165,8 +186,16 @@ if df is not None and '주소' in df.columns:
         
         folium.Marker(
             [row['위도'], row['경도']],
-            popup=folium.Popup(f"<b>{row['업체명']}</b><br>{row['주소']}", max_width=300),
-            tooltip=folium.Tooltip(row['업체명'], permanent=bool(is_search_target)),
+            popup=folium.Popup(f"<b>{row['업체명']}</b><br>{row['주소']}", max_width=250),
+            
+            # 2. 마커 옆에 항상 표시되는 이름 (툴팁)
+            # permanent=True: 마우스를 올리지 않아도 항상 이름이 보입니다.
+            # permanent=False: 마우스를 올리거나 모바일에서 터치했을 때만 이름이 보입니다.
+            tooltip=folium.Tooltip(row['업체명'], permanent=True),
+            
+
+            # popup=folium.Popup(f"<b>{row['업체명']}</b><br>{row['주소']}", max_width=300),
+            # tooltip=folium.Tooltip(row['업체명'], permanent=bool(is_search_target)),
             icon=folium.Icon(color=icon_color, icon='info-sign')
         ).add_to(marker_cluster)
 
